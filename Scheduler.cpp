@@ -82,10 +82,7 @@ void Scheduler::beginProfiling(ScheduleItem *target) {
 *  Typically, we'd do this when the profiler is being turned on.
 */
 void Scheduler::beginProfiling(uint32_t g_pid) {
-  ScheduleItem *nu_sched  = findNodeByPID(g_pid);
-  if (nu_sched != NULL) {
-    this->beginProfiling(nu_sched);
-  }
+  this->beginProfiling(findNodeByPID(g_pid));
 }
 
 
@@ -94,9 +91,9 @@ void Scheduler::beginProfiling(uint32_t g_pid) {
 * Note: If profiling is ever re-started on this schedule, the profiling data
 *  that this function preserves will be wiped.
 */
-void Scheduler::stopProfiling(ScheduleItem *target) {
-  if (target != NULL) {
-    ScheduleProfile *p_data  = target->prof_data;
+void Scheduler::stopProfiling(ScheduleItem *obj) {
+  if (obj != NULL) {
+    ScheduleProfile *p_data  = obj->prof_data;
     if (p_data != NULL) {
       p_data->profiling_active  = false;
     }
@@ -109,21 +106,19 @@ void Scheduler::stopProfiling(ScheduleItem *target) {
 *  Typically, we'd do this when the profiler is being turned on.
 */
 void Scheduler::stopProfiling(uint32_t g_pid) {
-  ScheduleItem *nu_sched  = findNodeByPID(g_pid);
-  if (nu_sched != NULL) {
-    this->stopProfiling(nu_sched);
-  }
+  this->stopProfiling(findNodeByPID(g_pid));
 }
 
 
 /**
 * Destroys whatever profiling data might be stored in the given schedule.
 */
-void Scheduler::clearProfilingData(ScheduleItem *target) {
-  if (target != NULL) {
-    ScheduleProfile *p_data  = target->prof_data;
+void Scheduler::clearProfilingData(ScheduleItem *obj) {
+  if (obj != NULL) {
+    ScheduleProfile *p_data  = obj->prof_data;
     if (p_data != NULL) {
       free(p_data);
+      p_data = NULL;
     }
   }
 }
@@ -134,10 +129,7 @@ void Scheduler::clearProfilingData(ScheduleItem *target) {
 *  Typically, we'd do this when the profiler is being turned on.
 */
 void Scheduler::clearProfilingData(uint32_t g_pid) {
-  ScheduleItem *nu_sched  = findNodeByPID(g_pid);
-  if (nu_sched != NULL) {
-    this->clearProfilingData(nu_sched);
-  }
+  this->clearProfilingData(findNodeByPID(g_pid));
 }
 
 
@@ -162,9 +154,7 @@ boolean Scheduler::scheduleBeingProfiled(ScheduleItem *obj) {
 *  Also returns false in the event that the ScheduleItem is NULL.
 */
 boolean Scheduler::scheduleBeingProfiled(uint32_t g_pid) {
-  boolean return_value  = false;
-  ScheduleItem *obj  = findNodeByPID(g_pid);
-  return this->scheduleBeingProfiled(obj);
+  return this->scheduleBeingProfiled(findNodeByPID(g_pid));
 }
 
 
@@ -201,20 +191,20 @@ uint16_t Scheduler::getActiveSchedules() {
 }
 
 
+
 /**
 * Destroy everything in the list. Should only be called by the destructor, but no harm
 *  in calling it for other reasons. Will stop and wipe all schedules. 
 */
 void Scheduler::destroyAllScheduleItems() {
-  if (this->schedule_root_node != NULL) {
-    if (this->schedule_root_node->next != NULL) {
-      destroyScheduleItem(this->schedule_root_node->next);
-    }
-    this->~Scheduler();
-    free(this->schedule_root_node->next);
-    free(this->schedule_root_node);
+  ScheduleItem *temp0  = this->schedule_root_node;
+  ScheduleItem *temp1;
+  while (temp0 != NULL) {
+    temp1  = temp0->next;
+    this->clearProfilingData(temp0);
+    free(temp0);
+    temp0 = temp1;
   }
-  this->schedule_root_node  = NULL;
 }
 
 
@@ -254,7 +244,6 @@ boolean Scheduler::insertScheduleItemAtEnd(ScheduleItem *nu) {
 * Returns NULL if a node is not found that meets this criteria.
 */
 ScheduleItem* Scheduler::findNodeByPID(uint32_t g_pid) {
-  ScheduleItem *return_value  = NULL;
   ScheduleItem *current  = this->schedule_root_node;
   while (current != NULL) {
     if (current->pid == g_pid) {
@@ -262,7 +251,7 @@ ScheduleItem* Scheduler::findNodeByPID(uint32_t g_pid) {
     }
     current  = current->next;
   }
-  return return_value;
+  return NULL;
 }
 
 
@@ -272,7 +261,6 @@ ScheduleItem* Scheduler::findNodeByPID(uint32_t g_pid) {
 * If target IS the schedule_root_node, returns NULL, because there is no node before the root node.
 */
 ScheduleItem* Scheduler::findNodeBeforeThisOne(ScheduleItem *target) {
-  ScheduleItem *return_value  = NULL;
   ScheduleItem *current  = this->schedule_root_node;
   while (current != NULL) {
     if (current->next == target) {  // Not a mistake. Trying to compare pointer addresses.
@@ -280,7 +268,7 @@ ScheduleItem* Scheduler::findNodeBeforeThisOne(ScheduleItem *target) {
     }
     current  = current->next;
   }
-  return return_value;
+  return NULL;
 }
 
 
@@ -288,6 +276,8 @@ ScheduleItem* Scheduler::findNodeBeforeThisOne(ScheduleItem *target) {
 * Given a pointer to the node we wish destroyed, destroy it, and maintain link integrity.
 * If the provided node is not part of the chain beginning at schedule_root_node, destroy it
 * anyway to avoid a leak, and since that is why we were called.
+* 
+* This is a private function.
 */
 void Scheduler::destroyScheduleItem(ScheduleItem *r_node) {
   if (r_node != NULL) {
@@ -323,6 +313,7 @@ uint32_t Scheduler::createSchedule(uint32_t sch_period, short recurrence, boolea
         nu_sched->thread_fire         = false;
         nu_sched->thread_recurs       = recurrence;
         nu_sched->thread_period       = sch_period;
+	nu_sched->next                = NULL;
         nu_sched->thread_time_to_wait = sch_period;
         nu_sched->autoclear           = ac;
         nu_sched->schedule_callback   = sch_callback;
@@ -341,23 +332,26 @@ uint32_t Scheduler::createSchedule(uint32_t sch_period, short recurrence, boolea
 *
 * Will not set the schedule active, but will clear any pending executions for this schedule, as well as reset the timer for it.
 */
-boolean Scheduler::alterSchedule(uint32_t schedule_index, uint32_t sch_period, short recurrence, boolean ac, FunctionPointer sch_callback) {
+boolean Scheduler::alterSchedule(ScheduleItem *obj, uint32_t sch_period, int16_t recurrence, boolean ac, FunctionPointer sch_callback) {
   boolean return_value  = false;
   if (sch_period > 1) {
     if (sch_callback != NULL) {
-      ScheduleItem *nu_sched  = findNodeByPID(schedule_index);
-      if (nu_sched != NULL) {
-        nu_sched->thread_fire         = false;
-        nu_sched->thread_recurs       = recurrence;
-        nu_sched->thread_period       = sch_period;
-        nu_sched->thread_time_to_wait = sch_period;
-        nu_sched->autoclear           = ac;
-        nu_sched->schedule_callback   = sch_callback;
+      if (obj != NULL) {
+        obj->thread_fire         = false;
+        obj->thread_recurs       = recurrence;
+        obj->thread_period       = sch_period;
+        obj->thread_time_to_wait = sch_period;
+        obj->autoclear           = ac;
+        obj->schedule_callback   = sch_callback;
         return_value  = true;
       }
     }
   }
   return return_value;
+}
+
+boolean Scheduler::alterSchedule(uint32_t g_pid, uint32_t sch_period, int16_t recurrence, boolean ac, FunctionPointer sch_callback) {
+  return this->alterSchedule(findNodeByPID(g_pid), sch_period, recurrence, ac, sch_callback);
 }
 
 boolean Scheduler::alterSchedule(uint32_t schedule_index, boolean ac) {
@@ -396,7 +390,7 @@ boolean Scheduler::alterSchedule(uint32_t schedule_index, uint32_t sch_period) {
   return return_value;
 }
 
-boolean Scheduler::alterSchedule(uint32_t schedule_index, short recurrence) {
+boolean Scheduler::alterSchedule(uint32_t schedule_index, int16_t recurrence) {
   boolean return_value  = false;
   ScheduleItem *nu_sched  = findNodeByPID(schedule_index);
   if (nu_sched != NULL) {
@@ -421,6 +415,43 @@ boolean Scheduler::enableSchedule(uint32_t g_pid) {
   }
   return false;
 }
+
+
+boolean Scheduler::delaySchedule(ScheduleItem *obj, uint32_t by_ms) {
+  if (obj != NULL) {
+    obj->thread_time_to_wait = by_ms;
+    obj->thread_enabled = true;
+    return true;
+  }
+  return false;
+}
+
+/**
+* Causes a given schedule's TTW (time-to-wait) to be set to the value we provide (this time only).
+* If the schedule wasn't enabled before, it will be when we return.
+*/
+boolean Scheduler::delaySchedule(uint32_t g_pid, uint32_t by_ms) {
+  ScheduleItem *nu_sched  = findNodeByPID(g_pid);
+  if (nu_sched != NULL) {
+    this->delaySchedule(nu_sched, by_ms);
+    return true;
+  }
+  return false;
+}
+
+/**
+* Causes a given schedule's TTW (time-to-wait) to be reset to its period.
+* If the schedule wasn't enabled before, it will be when we return.
+*/
+boolean Scheduler::delaySchedule(uint32_t g_pid) {
+  ScheduleItem *nu_sched  = findNodeByPID(g_pid);
+  if (nu_sched != NULL) {
+    this->delaySchedule(nu_sched, nu_sched->thread_period);
+    return true;
+  }
+  return false;
+}
+
 
 
 /**
@@ -462,23 +493,10 @@ boolean Scheduler::disableSchedule(uint32_t g_pid) {
 * Will remove the indicated schedule and wipe its profiling data.
 *  Returns true on success and false on failure.
 */
-boolean Scheduler::removeSchedule(ScheduleItem *obj) {
-  if (obj != NULL) {
-    this->destroyScheduleItem(obj);
-    return true;
-  }
-  return false;
-}
-
-
-/**
-* Will remove the indicated schedule and wipe its profiling data.
-*  Returns true on success and false on failure.
-*/
 boolean Scheduler::removeSchedule(uint32_t g_pid) {
-  boolean return_value  = false;
   ScheduleItem *obj  = findNodeByPID(g_pid);
-  return this->removeSchedule(obj);
+  if (obj != NULL) this->destroyScheduleItem(obj);
+  return true;
 }
 
 
@@ -491,10 +509,13 @@ boolean Scheduler::removeSchedule(uint32_t g_pid) {
 void Scheduler::serviceScheduledEvents() {
   uint32_t profile_start_time, profile_last_time;
   ScheduleItem *current  = this->schedule_root_node;
+  ScheduleItem *temp;
   while (current != NULL) {
+    temp = NULL;
     if (current->thread_fire) {
-      if (this->scheduleBeingProfiled(current)) profile_start_time = micros();
       if (current->schedule_callback != NULL) {
+        if (this->scheduleBeingProfiled(current)) profile_start_time = micros();
+  
         ((void (*)(void)) current->schedule_callback)();    // Call the schedule's service function.
 
         if (this->scheduleBeingProfiled(current)) {
@@ -504,27 +525,31 @@ void Scheduler::serviceScheduledEvents() {
           current->prof_data->best_time_micros   = min(current->prof_data->best_time_micros, current->prof_data->last_time_micros);
           current->prof_data->execution_count++;
         }            
-
-        switch (current->thread_recurs) {
-          case -1:           // Do nothing. Schedule runs indefinitely.
-            break;
-          case 0:            // Remove the schedule.
-            if (current->autoclear);// this->removeSchedule(current);
-            else {
-              current->thread_enabled = false;
-              current->thread_fire    = false;
-              current->thread_time_to_wait = current->thread_period;
-            }
-            break;
-          default:           // Decrement the run count.
-            current->thread_recurs--;
-            break;
-        }
       }
       current->thread_fire = false;
+      
+      switch (current->thread_recurs) {
+        case -1:           // Do nothing. Schedule runs indefinitely.
+          break;
+        case 0:            // Disable (and remove?) the schedule.
+          if (current->autoclear) {
+	    temp = current->next;  // Careful.....
+	    this->destroyScheduleItem(current);
+	    current = temp;
+	  }
+          else {
+            current->thread_enabled = false;  // Disable the schedule...
+            current->thread_fire    = false;  // ...mark it as serviced.
+            current->thread_time_to_wait = current->thread_period;  // ...and reset the timer.
+          }
+          break;
+        default:           // Decrement the run count.
+          current->thread_recurs--;
+          break;
+      }
       this->productive_loops++;
     }
-    current = current->next;
+    current = (current == NULL) ? temp : current->next;
   }
   this->total_loops++;
 }
@@ -538,9 +563,9 @@ void Scheduler::serviceScheduledEvents() {
 ****************************************************************************************************/
 
 /**
-* Dumps profiling data for all schedules where the data exists.
+* Dumps profiling data for the schedule with the given PID.
 */
-char* Scheduler::dumpProfilingData() {
+char* Scheduler::dumpProfilingData(uint32_t g_pid) {
   const char* PROFILER_HEADER = "[PID, PROFILING, EXECUTED, LAST, BEST, WORST]\n";
   char* return_value  = NULL;
   const uint16_t EXPECTED_SIZE_OF_LINE = 140;
@@ -556,9 +581,11 @@ char* Scheduler::dumpProfilingData() {
   
       while (current != NULL) {
         if (current->prof_data != NULL) {
-          sprintf(temp_str, "[%d, %s, %d, %d, %d, %d]\n", current->pid, ((current->prof_data->profiling_active) ? "YES":"NO"), current->prof_data->execution_count, current->prof_data->last_time_micros, current->prof_data->best_time_micros, current->prof_data->worst_time_micros);
-          strcat(temp_str_out, temp_str);
-          bzero(temp_str, EXPECTED_SIZE_OF_LINE);
+	  if (g_pid == 0 | g_pid == current->pid) {
+            sprintf(temp_str, "[%d, %s, %d, %d, %d, %d]\n", current->pid, ((current->prof_data->profiling_active) ? "YES":"NO"), current->prof_data->execution_count, current->prof_data->last_time_micros, current->prof_data->best_time_micros, current->prof_data->worst_time_micros);
+            strcat(temp_str_out, temp_str);
+            bzero(temp_str, EXPECTED_SIZE_OF_LINE);
+	  }
         }
         current = current->next;
       }
@@ -575,39 +602,21 @@ char* Scheduler::dumpProfilingData() {
   return return_value;
 }
 
-
 /**
-* Dumps profiling data for the schedule with the given PID.
+* Dumps profiling data for all schedules where the data exists.
 */
-char* Scheduler::dumpProfilingData(uint32_t g_pid) {
-  const char* PROFILER_HEADER = "[PID, EXECUTED, LAST, BEST, WORST]\n";
-  char* return_value  = NULL;
-  ScheduleItem *nu_sched  = findNodeByPID(g_pid);
-  if (nu_sched != NULL) {
-    char* temp_str  = (char*) alloca(100);  // Arbitrary. Slightly too big. Should not overflow.
-    bzero(temp_str, 100);
-    if (nu_sched->prof_data != NULL) {
-      sprintf(temp_str, "%s[%d, %s, %d, %d, %d, %d]\n", PROFILER_HEADER, nu_sched->pid, ((nu_sched->prof_data->profiling_active) ? "YES":"NO"), nu_sched->prof_data->execution_count, nu_sched->prof_data->last_time_micros, nu_sched->prof_data->best_time_micros, nu_sched->prof_data->worst_time_micros);
-      return_value = strdup(temp_str);
-    }
-    else {
-      return_value = strdup("NO PROFILING DATA\n");
-    }
-  }
-  else {
-    return_value = strdup("NO SCHEDULE WITH GIVEN PID\n");
-  }
-  return return_value;
+char* Scheduler::dumpProfilingData() {
+  return this->dumpProfilingData(-1);
 }
 
 
 /**
-* Dumps schedule data for all defined schedules. Active or not.
+* Dumps schedule data. Pass 0 as the first parameter to get all processes.
 */
-char* Scheduler::dumpAllScheduleData() {
-  const char* SCHEDULE_HEADER = "[PID, ENABLED, TTF, PERIOD, RECURS, PENDING, PROFILED]\n";
+char* Scheduler::dumpScheduleData(uint32_t g_pid, boolean actives_only) {
+  const char* SCHEDULE_HEADER = "[PID, ENABLED, TTF, PERIOD, RECURS, PENDING, AUTOCLEAR, PROFILED]\n";
   char* return_value  = NULL;
-  const uint16_t EXPECTED_SIZE_OF_LINE = 140;
+  const uint16_t EXPECTED_SIZE_OF_LINE = 146;
   uint16_t num_strs  = this->getTotalSchedules();
   if (num_strs > 0) {
     ScheduleItem *current  = this->schedule_root_node;
@@ -619,9 +628,11 @@ char* Scheduler::dumpAllScheduleData() {
       strcat(temp_str_out, SCHEDULE_HEADER);    // Write the header.
   
       while (current != NULL) {
-        sprintf(temp_str, "[%s, %d, %d, %d, %d, %s, %s]\n", ((current->thread_enabled) ? "YES":"NO"), current->pid, current->thread_time_to_wait, current->thread_period, current->thread_recurs, ((current->thread_fire) ? "YES":"NO"), ((current->prof_data != NULL && current->prof_data->profiling_active) ? "YES":"NO"));
-        strcat(temp_str_out, temp_str);
-        bzero(temp_str, EXPECTED_SIZE_OF_LINE);
+	if ((g_pid == 0 | g_pid == current->pid) | !actives_only){
+          sprintf(temp_str, "[%s, %d, %d, %d, %d, %s, %s, %s]\n", current->pid, ((current->thread_enabled) ? "YES":"NO"), current->thread_time_to_wait, current->thread_period, current->thread_recurs, ((current->thread_fire) ? "YES":"NO"), ((current->autoclear) ? "YES":"NO"), ((current->prof_data != NULL && current->prof_data->profiling_active) ? "YES":"NO"));
+          strcat(temp_str_out, temp_str);
+          bzero(temp_str, EXPECTED_SIZE_OF_LINE);
+	}
         current = current->next;
       }
       return_value = strdup(temp_str_out);
@@ -637,50 +648,23 @@ char* Scheduler::dumpAllScheduleData() {
   return return_value;
 }
 
-
 /**
-* Dumps schedule data for all active schedules.
+* Dumps schedule data for all defined schedules. Active or not.
 */
-char* Scheduler::dumpAllActiveScheduleData() {
-  const char* SCHEDULE_HEADER = "[PID, ENABLED, TTF, PERIOD, RECURS, PENDING, PROFILED]\n";
-  char* return_value  = NULL;
-  const uint16_t EXPECTED_SIZE_OF_LINE = 140;
-  uint16_t num_strs  = this->getActiveSchedules();
-  ScheduleItem *current  = this->schedule_root_node;
-  char* temp_str_out  = (char*) alloca(EXPECTED_SIZE_OF_LINE * num_strs);  // Arbitrary. Slightly too big. Should not overflow.
-  bzero(temp_str_out, EXPECTED_SIZE_OF_LINE * num_strs);
-  char* temp_str  = (char*) alloca(EXPECTED_SIZE_OF_LINE);  // Arbitrary. Slightly too big. Should not overflow.
-  bzero(temp_str, EXPECTED_SIZE_OF_LINE);
-  strcat(temp_str_out, SCHEDULE_HEADER);    // Write the header.
-  
-  while (current != NULL) {
-    if (current->thread_enabled) {
-      sprintf(temp_str, "[%s, %d, %d, %d, %d, %s, %s]\n", ((current->thread_enabled) ? "YES":"NO"), current->pid, current->thread_time_to_wait, current->thread_period, current->thread_recurs, ((current->thread_fire) ? "YES":"NO"), ((current->prof_data != NULL && current->prof_data->profiling_active) ? "YES":"NO"));
-      strcat(temp_str_out, temp_str);
-      bzero(temp_str, EXPECTED_SIZE_OF_LINE);
-    }
-    current = current->next;
-  }
-  return_value = strdup(temp_str_out);
-  return return_value;
+char* Scheduler::dumpScheduleData() {
+  return this->dumpScheduleData(0, false);
 }
-
 
 /**
 * Dumps schedule data for the schedule with the given PID.
 */
 char* Scheduler::dumpScheduleData(uint32_t g_pid) {
-  const char* SCHEDULE_HEADER = "[PID, ENABLED, TTF, PERIOD, RECURS, PENDING, PROFILED]\n";
-  char* return_value  = NULL;
-  ScheduleItem *nu_sched  = findNodeByPID(g_pid);
-  char* temp_str  = (char*) alloca(128);  // Arbitrary. Slightly too big. Should not overflow.
-  bzero(temp_str, 128);
-  if (nu_sched != NULL) {
-    sprintf(temp_str, "%s[%s, %d, %d, %d, %d, %s, %s]\n", SCHEDULE_HEADER, ((nu_sched->thread_enabled) ? "YES":"NO"), nu_sched->pid, nu_sched->thread_time_to_wait, nu_sched->thread_period, nu_sched->thread_recurs, ((nu_sched->thread_fire) ? "YES":"NO"), ((nu_sched->prof_data != NULL && nu_sched->prof_data->profiling_active) ? "YES":"NO"));
-    return_value = strdup(temp_str);
-  }
-  else {
-    return_value = strdup("NO SCHEDULE WITH GIVEN PID\n");
-  }
-  return return_value;
+  return this->dumpScheduleData(g_pid, false);
+}
+
+/**
+* Dumps schedule data for all active schedules.
+*/
+char* Scheduler::dumpAllActiveScheduleData() {
+  return this->dumpScheduleData(0, true);
 }

@@ -63,6 +63,8 @@ typedef struct sch_item_t {
   FunctionPointer schedule_callback;   // Pointers to the schedule service function.
 } ScheduleItem;
 
+
+
 /**  Note 2:
 * If this value is equal to -1, then the schedule recurs for as long as it remains enabled.
 *  If the value is zero, the schedule is disabled upon execution.
@@ -133,7 +135,7 @@ class Scheduler {
     boolean alterSchedule(uint32_t schedule_index, uint32_t sch_period, short recurrence, boolean auto_clear, FunctionPointer sch_callback);
     boolean alterSchedule(uint32_t schedule_index, uint32_t sch_period);
     boolean alterSchedule(uint32_t schedule_index, boolean auto_clear);
-    boolean alterSchedule(uint32_t schedule_index, short recurrence);
+    boolean alterSchedule(uint32_t schedule_index, int16_t recurrence);
     boolean alterSchedule(uint32_t schedule_index, FunctionPointer sch_callback);
     
     /* Add a new schedule. Returns the PID. If zero is returned, function failed.
@@ -150,6 +152,8 @@ class Scheduler {
 
     boolean disableSchedule(uint32_t g_pid);  // Turn a schedule off without removing it.
     boolean removeSchedule(uint32_t g_pid);   // Clears all data relating to the given schedule.
+    boolean delaySchedule(uint32_t g_pid, uint32_t by_ms);  // Set the schedule's TTW to the given value this execution only.
+    boolean delaySchedule(uint32_t g_pid);                  // Reset the given schedule to its period and enable it.
 
     void serviceScheduledEvents(void);        // Execute any schedules that have come due.
     void advanceScheduler(void);              // Push all enabled schedules forward by one tick.
@@ -159,27 +163,30 @@ class Scheduler {
      *   they are a bit heavy (depend on sprintf). There is no harm in removing them from 
      *   the library if you are space-constrained. 
      */
-    char* dumpAllScheduleData(void);          // Dumps schedule data for all defined schedules. Active or not.
-    char* dumpAllActiveScheduleData(void);    // Dumps schedule data for all active schedules.
-    char* dumpScheduleData(uint32_t g_pid);   // Dumps schedule data for the schedule with the given PID.
-    char* dumpProfilingData(void);            // Dumps profiling data for all schedules where the data exists.
-    char* dumpProfilingData(uint32_t g_pid);  // Dumps profiling data for the schedule with the given PID.
+    char* dumpAllActiveScheduleData(void);                       // Dumps schedule data for all active schedules.
+    char* dumpScheduleData(void);                                // Dumps schedule data for all defined schedules. Active or not.
+    char* dumpScheduleData(uint32_t g_pid);                      // Dumps schedule data for the schedule with the given PID.
+    char* dumpProfilingData(void);                               // Dumps profiling data for all schedules where the data exists.
+    char* dumpProfilingData(uint32_t g_pid);                     // Dumps profiling data for the schedule with the given PID.
+    char* dumpScheduleData(uint32_t g_pid, boolean active_only); // Dumps schedule data for all defined schedules. Active or not.
 
   private:
     boolean scheduleBeingProfiled(ScheduleItem *obj);
-    void beginProfiling(ScheduleItem *target);
-    void stopProfiling(ScheduleItem *target);
-    void clearProfilingData(ScheduleItem *nu);        // Clears profiling data associated with the given schedule.
+    void beginProfiling(ScheduleItem *obj);
+    void stopProfiling(ScheduleItem *obj);
+    void clearProfilingData(ScheduleItem *obj);        // Clears profiling data associated with the given schedule.
     
+    boolean alterSchedule(ScheduleItem *obj, uint32_t sch_period, short recurrence, boolean auto_clear, FunctionPointer sch_callback);
+
     boolean insertScheduleItemAfterNode(ScheduleItem *nu, ScheduleItem *prev);
-    boolean insertScheduleItemAtEnd(ScheduleItem *nu);
+    boolean insertScheduleItemAtEnd(ScheduleItem *obj);
     void destroyAllScheduleItems(void);
     
     ScheduleItem* findNodeByPID(uint32_t g_pid);
-    ScheduleItem* findNodeBeforeThisOne(ScheduleItem *target);
+    ScheduleItem* findNodeBeforeThisOne(ScheduleItem *obj);
     void destroyScheduleItem(ScheduleItem *r_node);
     
-    boolean removeSchedule(ScheduleItem *obj);
+    boolean delaySchedule(ScheduleItem *obj, uint32_t by_ms);
 };
 
 #endif
