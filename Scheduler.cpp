@@ -548,6 +548,7 @@ void Scheduler::serviceScheduledEvents() {
           break;
       }
       this->productive_loops++;
+      break;
     }
     current = (current == NULL) ? temp : current->next;
   }
@@ -581,7 +582,7 @@ char* Scheduler::dumpProfilingData(uint32_t g_pid) {
   
       while (current != NULL) {
         if (current->prof_data != NULL) {
-	  if (g_pid == 0 | g_pid == current->pid) {
+	  if ((g_pid == 0 | g_pid == current->pid) | (g_pid == -1)) {
             sprintf(temp_str, "[%d, %s, %d, %d, %d, %d]\n", current->pid, ((current->prof_data->profiling_active) ? "YES":"NO"), current->prof_data->execution_count, current->prof_data->last_time_micros, current->prof_data->best_time_micros, current->prof_data->worst_time_micros);
             strcat(temp_str_out, temp_str);
             bzero(temp_str, EXPECTED_SIZE_OF_LINE);
