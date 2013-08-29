@@ -53,7 +53,7 @@ typedef struct sch_item_prof_t {
 typedef struct sch_item_t {
   struct sch_item_t* next;             // This will be a linked-list.
   struct sch_item_prof_t* prof_data;   // If this schedule is being profiled, the ref will be here.
-  uint32_t pid;                        // The process ID of this item.
+  uint32_t pid;                        // The process ID of this item. Zero is invalid.
   uint32_t thread_time_to_wait;        // How much longer until the schedule fires?
   uint32_t thread_period;              // How often does this schedule execute?
   int16_t  thread_recurs;              // See Note 2.
@@ -72,55 +72,14 @@ typedef struct sch_item_t {
 */
 
 
-#ifndef __cplusplus
-    // Despite being public members, these values should not be written from outside the class.
-    uint32_t productive_loops = 0x00000000;  // Number of calls to serviceScheduledEvents() that actually called a schedule.
-    uint32_t total_loops      = 0x00000000;  // Number of calls to serviceScheduledEvents().
-
-    uint16_t getTotalSchedules(void);   // How many total schedules are present?
-    uint16_t getActiveSchedules(void);  // How many active schedules are present?
-    
-    boolean scheduleBeingProfiled(uint32_t g_pid);
-    void beginProfiling(uint32_t g_pid);
-    void stopProfiling(uint32_t g_pid);
-    void clearProfilingData(uint32_t g_pid);        // Clears profiling data associated with the given schedule.
-    
-    
-    // Alters an existing schedule (if PID is found),
-    boolean alterSchedule(uint32_t schedule_index, uint32_t sch_period, short recurrence, boolean auto_clear, FunctionPointer sch_callback);
-    boolean alterSchedule(uint32_t schedule_index, uint32_t sch_period);
-    boolean alterSchedule(uint32_t schedule_index, boolean auto_clear);
-    boolean alterSchedule(uint32_t schedule_index, int16_t recurrence);
-    boolean alterSchedule(uint32_t schedule_index, FunctionPointer sch_callback);
-
-    uint32_t createSchedule(uint32_t sch_period, short recurrence, boolean auto_clear, FunctionPointer sch_callback);
-    
-    boolean enableSchedule(uint32_t g_pid);   // Re-enable a previously-disabled schedule.
-
-    boolean disableSchedule(uint32_t g_pid);  // Turn a schedule off without removing it.
-    boolean removeSchedule(uint32_t g_pid);   // Clears all data relating to the given schedule.
-    boolean delaySchedule(uint32_t g_pid, uint32_t by_ms);  // Set the schedule's TTW to the given value this execution only.
-    boolean delaySchedule(uint32_t g_pid);                  // Reset the given schedule to its period and enable it.
-
-    void serviceScheduledEvents(void);        // Execute any schedules that have come due.
-    void advanceScheduler(void);              // Push all enabled schedules forward by one tick.
-    
-    char* dumpAllActiveScheduleData(void);                       // Dumps schedule data for all active schedules.
-    char* dumpScheduleData(void);                                // Dumps schedule data for all defined schedules. Active or not.
-    char* dumpScheduleData(uint32_t g_pid);                      // Dumps schedule data for the schedule with the given PID.
-    char* dumpProfilingData(void);                               // Dumps profiling data for all schedules where the data exists.
-    char* dumpProfilingData(uint32_t g_pid);                     // Dumps profiling data for the schedule with the given PID.
-    char* dumpScheduleData(uint32_t g_pid, boolean active_only); // Dumps schedule data for all defined schedules. Active or not.
-#endif
-
-
 #ifdef __cplusplus
 
 // This is the only version I've tested...
 class Scheduler {
   uint32_t next_pid = 0x00000001;      // Next PID to assign.
   ScheduleItem* schedule_root_node = NULL; // The root of the linked lists in this scheduler.
-
+  uint32_t currently_executing = 0x00000000;	// Hold PID of currently-executing Schedule. 0 if none.
+  
   public:
     Scheduler();   // Constructor
     ~Scheduler();  // Destructor
@@ -139,10 +98,10 @@ class Scheduler {
     
     // Alters an existing schedule (if PID is found),
     boolean alterSchedule(uint32_t schedule_index, uint32_t sch_period, short recurrence, boolean auto_clear, FunctionPointer sch_callback);
-    boolean alterSchedule(uint32_t schedule_index, uint32_t sch_period);
     boolean alterSchedule(uint32_t schedule_index, boolean auto_clear);
-    boolean alterSchedule(uint32_t schedule_index, int16_t recurrence);
     boolean alterSchedule(uint32_t schedule_index, FunctionPointer sch_callback);
+    boolean alterScheduleRecurrence(uint32_t schedule_index, int16_t recurrence);
+    boolean alterSchedulePeriod(uint32_t schedule_index, uint32_t sch_period);
     
     /* Add a new schedule. Returns the PID. If zero is returned, function failed.
      * 
@@ -160,6 +119,8 @@ class Scheduler {
     boolean removeSchedule(uint32_t g_pid);   // Clears all data relating to the given schedule.
     boolean delaySchedule(uint32_t g_pid, uint32_t by_ms);  // Set the schedule's TTW to the given value this execution only.
     boolean delaySchedule(uint32_t g_pid);                  // Reset the given schedule to its period and enable it.
+    
+    boolean willRunAgain(uint32_t g_pid);                  // Returns true if the indicated schedule will fire again.
 
     void serviceScheduledEvents(void);        // Execute any schedules that have come due.
     void advanceScheduler(void);              // Push all enabled schedules forward by one tick.
@@ -187,7 +148,8 @@ class Scheduler {
     boolean insertScheduleItemAfterNode(ScheduleItem *nu, ScheduleItem *prev);
     boolean insertScheduleItemAtEnd(ScheduleItem *obj);
     void destroyAllScheduleItems(void);
-    
+
+    uint32_t get_valid_new_pid(void);    
     ScheduleItem* findNodeByPID(uint32_t g_pid);
     ScheduleItem* findNodeBeforeThisOne(ScheduleItem *obj);
     void destroyScheduleItem(ScheduleItem *r_node);

@@ -33,7 +33,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 
 
-
 /****************************************************************************************************
 * Class-management functions...                                                                     *
 ****************************************************************************************************/
@@ -296,6 +295,24 @@ void Scheduler::destroyScheduleItem(ScheduleItem *r_node) {
 
 
 /**
+*  When we assign a new PID, call this function to get one. Since we don't want
+*    to collide with one that already exists, or get the zero value. 
+*/
+uint32_t Scheduler::get_valid_new_pid() {
+    uint32_t return_value = this->next_pid++;
+    if (return_value == 0) {
+        return_value = this->get_valid_new_pid();  // Recurse...
+    }
+    // Takes too long, but represents a potential bug.
+    //else if (this->findNodeByPID(return_value) == NULL) {
+    //	return_value = this->get_valid_new_pid();  // Recurse...
+    //}
+
+	return return_value;
+}
+
+
+/**
 *  Call this function to create a new schedule with the given period, a given number of repititions, and with a given function call.
 *
 *  Will automatically set the schedule active, provided the input conditions are met.
@@ -308,12 +325,12 @@ uint32_t Scheduler::createSchedule(uint32_t sch_period, short recurrence, boolea
       ScheduleItem *nu_sched = (ScheduleItem *) malloc(sizeof(ScheduleItem));
       if (nu_sched != NULL) {  // Did we actually malloc() successfully?
         bzero(nu_sched, sizeof(ScheduleItem));
-        nu_sched->pid  = next_pid++;
+        nu_sched->pid  = this->get_valid_new_pid();
         nu_sched->thread_enabled      = true;    // Note: Enables immediately.
         nu_sched->thread_fire         = false;
         nu_sched->thread_recurs       = recurrence;
         nu_sched->thread_period       = sch_period;
-	nu_sched->next                = NULL;
+        nu_sched->next                = NULL;
         nu_sched->thread_time_to_wait = sch_period;
         nu_sched->autoclear           = ac;
         nu_sched->schedule_callback   = sch_callback;
@@ -376,7 +393,7 @@ boolean Scheduler::alterSchedule(uint32_t schedule_index, FunctionPointer sch_ca
   return return_value;
 }
 
-boolean Scheduler::alterSchedule(uint32_t schedule_index, uint32_t sch_period) {
+boolean Scheduler::alterSchedulePeriod(uint32_t schedule_index, uint32_t sch_period) {
   boolean return_value  = false;
   if (sch_period > 1) {
     ScheduleItem *nu_sched  = findNodeByPID(schedule_index);
@@ -390,7 +407,7 @@ boolean Scheduler::alterSchedule(uint32_t schedule_index, uint32_t sch_period) {
   return return_value;
 }
 
-boolean Scheduler::alterSchedule(uint32_t schedule_index, int16_t recurrence) {
+boolean Scheduler::alterScheduleRecurrence(uint32_t schedule_index, int16_t recurrence) {
   boolean return_value  = false;
   ScheduleItem *nu_sched  = findNodeByPID(schedule_index);
   if (nu_sched != NULL) {
@@ -401,6 +418,24 @@ boolean Scheduler::alterSchedule(uint32_t schedule_index, int16_t recurrence) {
   return return_value;
 }
 
+
+/**
+* Returns true if...
+* A) The schedule exists
+*    AND
+* B) The schedule is enabled, and has at least one more runtime before it *might* be auto-reaped.
+*/
+boolean Scheduler::willRunAgain(uint32_t g_pid) {
+  ScheduleItem *nu_sched  = findNodeByPID(g_pid);
+  if (nu_sched != NULL) {
+    if (nu_sched->thread_enabled) {
+      if ((nu_sched->thread_recurs == -1) || (nu_sched->thread_recurs > 0)) {
+	return true;
+      }
+    }
+  }
+  return false;
+}
 
 
 /**
@@ -491,11 +526,22 @@ boolean Scheduler::disableSchedule(uint32_t g_pid) {
 
 /**
 * Will remove the indicated schedule and wipe its profiling data.
-*  Returns true on success and false on failure.
+* In case this gets called from the schedule's service function (IE,
+*   if the schedule tries to delete itself), let it expire this run
+*   rather than ripping the rug out from under ourselves.
+* Returns true on success and false on failure.
 */
 boolean Scheduler::removeSchedule(uint32_t g_pid) {
   ScheduleItem *obj  = findNodeByPID(g_pid);
-  if (obj != NULL) this->destroyScheduleItem(obj);
+  if (obj != NULL) {
+    if (obj->pid != this->currently_executing) {
+      this->destroyScheduleItem(obj);
+    }
+    else { 
+      obj->autoclear = true;
+      obj->thread_recurs = 0;
+    }
+  }
   return true;
 }
 
@@ -515,8 +561,10 @@ void Scheduler::serviceScheduledEvents() {
     if (current->thread_fire) {
       if (current->schedule_callback != NULL) {
         if (this->scheduleBeingProfiled(current)) profile_start_time = micros();
-  
+        
+        this->currently_executing = current->pid;
         ((void (*)(void)) current->schedule_callback)();    // Call the schedule's service function.
+        this->currently_executing = 0;
 
         if (this->scheduleBeingProfiled(current)) {
           profile_last_time     = micros();
@@ -527,16 +575,16 @@ void Scheduler::serviceScheduledEvents() {
         }            
       }
       current->thread_fire = false;
-      
+         
       switch (current->thread_recurs) {
         case -1:           // Do nothing. Schedule runs indefinitely.
           break;
         case 0:            // Disable (and remove?) the schedule.
           if (current->autoclear) {
-	    temp = current->next;  // Careful.....
-	    this->destroyScheduleItem(current);
-	    current = temp;
-	  }
+            temp = current->next;  // Careful.....
+            this->destroyScheduleItem(current);
+            current = temp;
+          }
           else {
             current->thread_enabled = false;  // Disable the schedule...
             current->thread_fire    = false;  // ...mark it as serviced.
