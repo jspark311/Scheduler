@@ -311,6 +311,10 @@ uint32_t Scheduler::get_valid_new_pid() {
 	return return_value;
 }
 
+uint32_t Scheduler::peekNextPID() {
+  return this->next_pid;
+}
+
 
 /**
 *  Call this function to create a new schedule with the given period, a given number of repititions, and with a given function call.
@@ -438,6 +442,15 @@ boolean Scheduler::willRunAgain(uint32_t g_pid) {
 }
 
 
+boolean Scheduler::scheduleEnabled(uint32_t g_pid) {
+  ScheduleItem *nu_sched  = findNodeByPID(g_pid);
+  if (nu_sched != NULL) {
+    return nu_sched->thread_enabled;
+  }
+  return false;
+}
+
+
 /**
 * Enable a previously disabled schedule.
 *  Returns true on success and false on failure.
@@ -554,6 +567,7 @@ boolean Scheduler::removeSchedule(uint32_t g_pid) {
 */
 void Scheduler::serviceScheduledEvents() {
   uint32_t profile_start_time, profile_last_time;
+  uint32_t origin_time = micros();
   ScheduleItem *current  = this->schedule_root_node;
   ScheduleItem *temp;
   while (current != NULL) {
@@ -600,6 +614,7 @@ void Scheduler::serviceScheduledEvents() {
     }
     current = (current == NULL) ? temp : current->next;
   }
+  this->overhead = micros() - origin_time;
   this->total_loops++;
 }
 
@@ -678,7 +693,7 @@ char* Scheduler::dumpScheduleData(uint32_t g_pid, boolean actives_only) {
   
       while (current != NULL) {
 	if ((g_pid == 0 | g_pid == current->pid) | !actives_only){
-          sprintf(temp_str, "[%s, %d, %d, %d, %d, %s, %s, %s]\n", current->pid, ((current->thread_enabled) ? "YES":"NO"), current->thread_time_to_wait, current->thread_period, current->thread_recurs, ((current->thread_fire) ? "YES":"NO"), ((current->autoclear) ? "YES":"NO"), ((current->prof_data != NULL && current->prof_data->profiling_active) ? "YES":"NO"));
+          sprintf(temp_str, "[%d, %s, %d, %d, %d, %s, %s, %s]\n", current->pid, ((current->thread_enabled) ? "YES":"NO"), current->thread_time_to_wait, current->thread_period, current->thread_recurs, ((current->thread_fire) ? "YES":"NO"), ((current->autoclear) ? "YES":"NO"), ((current->prof_data != NULL && current->prof_data->profiling_active) ? "YES":"NO"));
           strcat(temp_str_out, temp_str);
           bzero(temp_str, EXPECTED_SIZE_OF_LINE);
 	}

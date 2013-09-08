@@ -87,9 +87,11 @@ class Scheduler {
     // Despite being public members, these values should not be written from outside the class.
     uint32_t productive_loops = 0x00000000;  // Number of calls to serviceScheduledEvents() that actually called a schedule.
     uint32_t total_loops      = 0x00000000;  // Number of calls to serviceScheduledEvents().
+    uint32_t overhead         = 0x00000000;  // The time in microseconds required to service the last empty schedule loop.
 
     uint16_t getTotalSchedules(void);   // How many total schedules are present?
     uint16_t getActiveSchedules(void);  // How many active schedules are present?
+    uint32_t peekNextPID(void);         // Discover the next PID without actually incrementing it.
     
     boolean scheduleBeingProfiled(uint32_t g_pid);
     void beginProfiling(uint32_t g_pid);
@@ -113,8 +115,9 @@ class Scheduler {
      */    
     uint32_t createSchedule(uint32_t sch_period, short recurrence, boolean auto_clear, FunctionPointer sch_callback);
     
-    boolean enableSchedule(uint32_t g_pid);   // Re-enable a previously-disabled schedule.
+    boolean scheduleEnabled(uint32_t g_pid);   // Is the given schedule presently enabled?
 
+    boolean enableSchedule(uint32_t g_pid);   // Re-enable a previously-disabled schedule.
     boolean disableSchedule(uint32_t g_pid);  // Turn a schedule off without removing it.
     boolean removeSchedule(uint32_t g_pid);   // Clears all data relating to the given schedule.
     boolean delaySchedule(uint32_t g_pid, uint32_t by_ms);  // Set the schedule's TTW to the given value this execution only.
