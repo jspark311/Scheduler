@@ -76,18 +76,20 @@ typedef struct sch_item_t {
 
 // This is the only version I've tested...
 class Scheduler {
-  uint32_t next_pid = 0x00000001;      // Next PID to assign.
-  ScheduleItem* schedule_root_node = NULL; // The root of the linked lists in this scheduler.
-  uint32_t currently_executing = 0x00000000;	// Hold PID of currently-executing Schedule. 0 if none.
+  uint32_t next_pid;                       // Next PID to assign.
+  ScheduleItem* schedule_root_node;        // The root of the linked lists in this scheduler.
+  uint32_t currently_executing;	           // Hold PID of currently-executing Schedule. 0 if none.
   
   public:
     Scheduler();   // Constructor
     ~Scheduler();  // Destructor
-    
-    // Despite being public members, these values should not be written from outside the class.
-    uint32_t productive_loops = 0x00000000;  // Number of calls to serviceScheduledEvents() that actually called a schedule.
-    uint32_t total_loops      = 0x00000000;  // Number of calls to serviceScheduledEvents().
-    uint32_t overhead         = 0x00000000;  // The time in microseconds required to service the last empty schedule loop.
+
+    /* Despite being public members, these values should not be written from outside the class.
+       They are only public for the sake of convenience of reading them. Since they are profiling-related,
+       no major class functionality (other than the profiler output) relies on them. */
+    uint32_t productive_loops;  // Number of calls to serviceScheduledEvents() that actually called a schedule.
+    uint32_t total_loops;       // Number of calls to serviceScheduledEvents().
+    uint32_t overhead;          // The time in microseconds required to service the last empty schedule loop.
 
     uint16_t getTotalSchedules(void);   // How many total schedules are present?
     uint16_t getActiveSchedules(void);  // How many active schedules are present?

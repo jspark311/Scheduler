@@ -41,6 +41,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 *  Called once on setup to bring the timer system into a known state.
 */
 Scheduler::Scheduler() {
+  this->next_pid            = 0x00000001;
+  this->currently_executing = 0x00000000;
+  this->schedule_root_node  = NULL;
+  this->productive_loops    = 0x00000000;
+  this->total_loops         = 0x00000000;
+  this->overhead            = 0x00000000;
 }
 
 
@@ -328,7 +334,7 @@ uint32_t Scheduler::createSchedule(uint32_t sch_period, short recurrence, boolea
     if (sch_callback != NULL) {
       ScheduleItem *nu_sched = (ScheduleItem *) malloc(sizeof(ScheduleItem));
       if (nu_sched != NULL) {  // Did we actually malloc() successfully?
-        bzero(nu_sched, sizeof(ScheduleItem));
+        memset(nu_sched, 0x00, sizeof(ScheduleItem));
         nu_sched->pid  = this->get_valid_new_pid();
         nu_sched->thread_enabled      = true;    // Note: Enables immediately.
         nu_sched->thread_fire         = false;
@@ -566,9 +572,10 @@ boolean Scheduler::removeSchedule(uint32_t g_pid) {
 *  Therefore: Lower-numbered schedules are de facto higher-priority.
 */
 void Scheduler::serviceScheduledEvents() {
-  uint32_t profile_start_time, profile_last_time;
-  uint32_t origin_time = micros();
-  ScheduleItem *current  = this->schedule_root_node;
+  uint32_t profile_start_time = 0;
+  uint32_t profile_last_time  = 0;
+  uint32_t origin_time        = micros();
+  ScheduleItem *current = this->schedule_root_node;
   ScheduleItem *temp;
   while (current != NULL) {
     temp = NULL;
@@ -638,17 +645,17 @@ char* Scheduler::dumpProfilingData(uint32_t g_pid) {
     ScheduleItem *current  = this->schedule_root_node;
     char* temp_str_out  = (char*) alloca(EXPECTED_SIZE_OF_LINE * num_strs);  // Arbitrary. Slightly too big. Should not overflow.
     if (temp_str_out != NULL) {
-      bzero(temp_str_out, EXPECTED_SIZE_OF_LINE * num_strs);
+      memset(temp_str_out, 0x00, EXPECTED_SIZE_OF_LINE * num_strs);
       char* temp_str  = (char*) alloca(EXPECTED_SIZE_OF_LINE);  // Arbitrary. Slightly too big. Should not overflow.
-      bzero(temp_str, EXPECTED_SIZE_OF_LINE);
+      memset(temp_str, 0x00, EXPECTED_SIZE_OF_LINE);
       strcat(temp_str_out, PROFILER_HEADER);    // Write the header.
   
       while (current != NULL) {
         if (current->prof_data != NULL) {
-	  if ((g_pid == 0 | g_pid == current->pid) | (g_pid == -1)) {
-            sprintf(temp_str, "[%d, %s, %d, %d, %d, %d]\n", current->pid, ((current->prof_data->profiling_active) ? "YES":"NO"), current->prof_data->execution_count, current->prof_data->last_time_micros, current->prof_data->best_time_micros, current->prof_data->worst_time_micros);
+	  if (((g_pid == 0) | (g_pid == current->pid)) | (g_pid == 0xFFFFFFFF)) {
+            sprintf(temp_str, "[%lu, %s, %lu, %lu, %lu, %lu]\n", current->pid, ((current->prof_data->profiling_active) ? "YES":"NO"), current->prof_data->execution_count, current->prof_data->last_time_micros, current->prof_data->best_time_micros, current->prof_data->worst_time_micros);
             strcat(temp_str_out, temp_str);
-            bzero(temp_str, EXPECTED_SIZE_OF_LINE);
+            memset(temp_str, 0x00, EXPECTED_SIZE_OF_LINE);
 	  }
         }
         current = current->next;
@@ -686,16 +693,16 @@ char* Scheduler::dumpScheduleData(uint32_t g_pid, boolean actives_only) {
     ScheduleItem *current  = this->schedule_root_node;
     char* temp_str_out  = (char*) alloca(EXPECTED_SIZE_OF_LINE * num_strs);  // Arbitrary. Slightly too big. Should not overflow.
     if (temp_str_out != NULL) {
-      bzero(temp_str_out, EXPECTED_SIZE_OF_LINE * num_strs);
+      memset(temp_str_out, 0x00, EXPECTED_SIZE_OF_LINE * num_strs);
       char* temp_str  = (char*) alloca(EXPECTED_SIZE_OF_LINE);  // Arbitrary. Slightly too big. Should not overflow.
-      bzero(temp_str, EXPECTED_SIZE_OF_LINE);
+      memset(temp_str, 0x00, EXPECTED_SIZE_OF_LINE);
       strcat(temp_str_out, SCHEDULE_HEADER);    // Write the header.
   
       while (current != NULL) {
-	if ((g_pid == 0 | g_pid == current->pid) | !actives_only){
-          sprintf(temp_str, "[%d, %s, %d, %d, %d, %s, %s, %s]\n", current->pid, ((current->thread_enabled) ? "YES":"NO"), current->thread_time_to_wait, current->thread_period, current->thread_recurs, ((current->thread_fire) ? "YES":"NO"), ((current->autoclear) ? "YES":"NO"), ((current->prof_data != NULL && current->prof_data->profiling_active) ? "YES":"NO"));
+	if (((g_pid == 0) | (g_pid == current->pid)) | !actives_only){
+          sprintf(temp_str, "[%lu, %s, %lu, %lu, %d, %s, %s, %s]\n", current->pid, ((current->thread_enabled) ? "YES":"NO"), current->thread_time_to_wait, current->thread_period, current->thread_recurs, ((current->thread_fire) ? "YES":"NO"), ((current->autoclear) ? "YES":"NO"), ((current->prof_data != NULL && current->prof_data->profiling_active) ? "YES":"NO"));
           strcat(temp_str_out, temp_str);
-          bzero(temp_str, EXPECTED_SIZE_OF_LINE);
+          memset(temp_str, 0x00, EXPECTED_SIZE_OF_LINE);
 	}
         current = current->next;
       }
