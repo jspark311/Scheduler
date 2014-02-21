@@ -31,9 +31,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
 
-
 #include <inttypes.h>
 #include "Arduino.h"
+
+#if defined(__MK20DX128__) || defined(__MK20DX256__)
+#else
+#include <alloca.h>
+#endif
+
 
 // We need to def a few types... First, let's def a function pointer to avoid
 // cluttering things up with unreadable casts...
@@ -101,7 +106,7 @@ class Scheduler {
     void clearProfilingData(uint32_t g_pid);        // Clears profiling data associated with the given schedule.
     
     // Alters an existing schedule (if PID is found),
-    boolean alterSchedule(uint32_t schedule_index, uint32_t sch_period, short recurrence, boolean auto_clear, FunctionPointer sch_callback);
+    boolean alterSchedule(uint32_t schedule_index, uint32_t sch_period, int16_t recurrence, boolean auto_clear, FunctionPointer sch_callback);
     boolean alterSchedule(uint32_t schedule_index, boolean auto_clear);
     boolean alterSchedule(uint32_t schedule_index, FunctionPointer sch_callback);
     boolean alterScheduleRecurrence(uint32_t schedule_index, int16_t recurrence);
@@ -115,7 +120,7 @@ class Scheduler {
      * auto_clear      When recurrence reaches 0, should the schedule be reaped?
      * sch_callback    The service function. Must be a pointer to a (void fxn(void)).
      */    
-    uint32_t createSchedule(uint32_t sch_period, short recurrence, boolean auto_clear, FunctionPointer sch_callback);
+    uint32_t createSchedule(uint32_t sch_period, int16_t recurrence, boolean auto_clear, FunctionPointer sch_callback);
     
     boolean scheduleEnabled(uint32_t g_pid);   // Is the given schedule presently enabled?
 
@@ -148,7 +153,7 @@ class Scheduler {
     void stopProfiling(ScheduleItem *obj);
     void clearProfilingData(ScheduleItem *obj);        // Clears profiling data associated with the given schedule.
     
-    boolean alterSchedule(ScheduleItem *obj, uint32_t sch_period, short recurrence, boolean auto_clear, FunctionPointer sch_callback);
+    boolean alterSchedule(ScheduleItem *obj, uint32_t sch_period, int16_t recurrence, boolean auto_clear, FunctionPointer sch_callback);
 
     boolean insertScheduleItemAfterNode(ScheduleItem *nu, ScheduleItem *prev);
     boolean insertScheduleItemAtEnd(ScheduleItem *obj);

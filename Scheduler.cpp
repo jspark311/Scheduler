@@ -328,7 +328,7 @@ uint32_t Scheduler::peekNextPID() {
 *  Will automatically set the schedule active, provided the input conditions are met.
 *  Returns the newly-created PID on success, or 0 on failure.
 */
-uint32_t Scheduler::createSchedule(uint32_t sch_period, short recurrence, boolean ac, FunctionPointer sch_callback) {
+uint32_t Scheduler::createSchedule(uint32_t sch_period, int16_t recurrence, boolean ac, FunctionPointer sch_callback) {
   uint32_t return_value  = 0;
   if (sch_period > 1) {
     if (sch_callback != NULL) {
