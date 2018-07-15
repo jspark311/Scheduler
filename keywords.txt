@@ -16,4 +16,4 @@ FunctionPointer	KEYWORD1
 #######################################
 # Constants (LITERAL1)
 #######################################
-MAX_SCHEDULE_COUNT	LITERAL_1
+MAX_SCHEDULE_COUNT	LITERAL1
